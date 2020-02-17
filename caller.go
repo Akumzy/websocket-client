@@ -1,4 +1,4 @@
-package socketio_client
+package websocket_client
 
 import (
 	"errors"
