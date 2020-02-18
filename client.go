@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -20,59 +21,39 @@ type Client struct {
 	uri        string
 }
 type Options struct {
-	Headers   http.Header
-	Reconnect bool
+	Headers       http.Header
+	AutoReconnect bool
+	ReconnetAfter time.Duration
 }
 type Payload struct {
-	Event string      `json:"event,omitempty"`
-	Data  interface{} `json:"data,omitempty"`
-	Ack   string      `json:"ack,omitempty"`
+	// Event name used to identify event handlers
+	Event string `json:"event,omitempty"`
+	// Message payload
+	Data interface{} `json:"data,omitempty"`
+	// Ack is string(event name) that will be sent to server which
+	// an acknowledgment will be published/sent to and the client will
+	// need to get the event name from client.Send method after emitting an
+	// event to server.
+	Ack string `json:"ack,omitempty"`
 }
 
 func NewClient(uri string, options Options) *Client {
 	return &Client{uri: uri, options: options, events: make(map[string]*caller)}
 }
 func (c *Client) Connect() error {
-	return c.connect()
-}
-func (c *Client) connect() error {
-	ws, _, err := websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
-	c.ws = ws
-	log.Printf("Connecting to %v", c.uri)
-	if err != nil {
-		return err
+	err := c.connect()
+	// Something seams off with the code below
+	// until I figure it out it will remain like that.
+	if err != websocket.ErrCloseSent {
+		if c.options.AutoReconnect {
+			time.Sleep(c.options.ReconnetAfter)
+			c.Connect()
+		}
 	}
-	defer func() {
-		c.ready = true
-	}()
-	for {
-		var payload Payload
-		err := ws.ReadJSON(&payload)
-		if err != nil {
-			return err
-		}
-		c.eventsLock.RLock()
-		handler, ok := c.events[payload.Event]
-		if ok {
-			args := handler.GetArgs()
-			if len(args) > 0 {
-				t := args[0]
-				buf, err := json.Marshal(payload.Data)
-				if err != nil {
-					return err
-				}
-				err = json.Unmarshal(buf, &t)
-				if err != nil {
-					return err
-				}
-				args[0] = t
-			}
-			handler.Call(args)
-		}
-		c.eventsLock.RUnlock()
+	return err
+}
 
-	}
-}
+// On method is used to subscribe to server sent events
 func (client *Client) On(message string, f interface{}) (err error) {
 	c, err := newCaller(f)
 	if err != nil {
@@ -84,14 +65,27 @@ func (client *Client) On(message string, f interface{}) (err error) {
 	return
 }
 
-var id = &ID{id: 1}
+// RemoveHandler
+func (client *Client) RemoveHandler(message string) {
+	client.eventsLock.Lock()
+	delete(client.events, message)
+	client.eventsLock.Unlock()
+}
 
+var id = &ID{id: 0}
+
+// Send method sends message to your Websocket server
+// It can take only take upto 3 arguments
+// first being the event-name your server handler will subscribed to (required)
+// second being the message payload of any type (optional)
+// and third is being an indicator (recommended as bool) showing that this message requires
+// an acknowledgement
 func (client *Client) Send(event string, data ...interface{}) (string, error) {
 	client.sendLock.Lock()
 	defer client.sendLock.Unlock()
 	if len(data) > 1 {
-		replay := fmt.Sprintf("%v__%d", event, id.new())
-		return replay, client.ws.WriteJSON(Payload{Event: event, Data: data[0], Ack: replay})
+		reply := fmt.Sprintf("%v__%d", event, id.new())
+		return reply, client.ws.WriteJSON(Payload{Event: event, Data: data[0], Ack: reply})
 	}
 	return "", client.ws.WriteJSON(Payload{Event: event, Data: data[0]})
 }
@@ -106,4 +100,47 @@ func (i *ID) new() int {
 	defer i.Unlock()
 	i.id++
 	return i.id
+}
+
+func (c *Client) connect() error {
+	ws, _, err := websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
+	c.ws = ws
+	log.Printf("Connecting to %v", c.uri)
+	if err != nil {
+		return err
+	}
+	defer ws.Close()
+	for {
+		var payload Payload
+		err := ws.ReadJSON(&payload)
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			c.eventsLock.RLock()
+			defer c.eventsLock.RUnlock()
+			handler, ok := c.events[payload.Event]
+			if ok {
+				args := handler.GetArgs()
+				if len(args) > 0 {
+					t := args[0]
+					buf, err := json.Marshal(payload.Data)
+					if err != nil {
+						return err
+					}
+					err = json.Unmarshal(buf, &t)
+					if err != nil {
+						return err
+					}
+					args[0] = t
+				}
+				go handler.Call(args)
+			}
+			return nil
+		}()
+		if err != nil {
+			return err
+		}
+
+	}
 }

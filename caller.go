@@ -54,20 +54,18 @@ func (c *caller) Call(args []interface{}) []reflect.Value {
 	c.RLock()
 	defer c.RUnlock()
 	var a []reflect.Value
-	diff := 0
 
 	a = make([]reflect.Value, len(args))
-	for i, arg := range args {
-		v := reflect.ValueOf(arg)
-		if c.Args[i].Kind() != reflect.Ptr {
-			if v.IsValid() {
-				v = v.Elem()
-			} else {
-				v = reflect.Zero(c.Args[i])
-			}
+
+	v := reflect.ValueOf(args[0])
+	if c.Args[0].Kind() != reflect.Ptr {
+		if v.IsValid() {
+			v = v.Elem()
+		} else {
+			v = reflect.Zero(c.Args[0])
 		}
-		a[i+diff] = v
 	}
+	a[0] = v
 
 	if len(args) != len(c.Args) {
 		return []reflect.Value{reflect.ValueOf([]interface{}{}), reflect.ValueOf(errors.New("Arguments do not match"))}
