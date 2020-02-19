@@ -46,7 +46,7 @@ func (c *Client) Connect() error {
 	// until I figure it out it will remain like that.
 	if err != websocket.ErrCloseSent {
 		if c.options.AutoReconnect {
-			time.Sleep(c.options.ReconnetAfter)
+			time.Sleep(c.options.ReconnectAfter)
 			c.Connect()
 		}
 	}
