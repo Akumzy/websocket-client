@@ -20,7 +20,7 @@ var client *WS.Client
 
 func main() {
 	header := http.Header{"Content-Type": []string{"application/json"}, "Authorization": []string{token}}
-	client = WS.NewClient("ws://localhost:4444/ws", WS.Options{Headers: header, AutoReconnect: true, ReconnetAfter: time.Second * 20})
+	client = WS.NewClient("ws://localhost:4444/ws", WS.Options{Headers: header, AutoReconnect: true, ReconnectAfter: time.Second * 20})
 	client.On("update", func(user User) {
 		log.Println(user)
 	})

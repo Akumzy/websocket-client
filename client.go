@@ -21,9 +21,9 @@ type Client struct {
 	uri        string
 }
 type Options struct {
-	Headers       http.Header
-	AutoReconnect bool
-	ReconnetAfter time.Duration
+	Headers        http.Header
+	AutoReconnect  bool
+	ReconnectAfter time.Duration
 }
 type Payload struct {
 	// Event name used to identify event handlers
