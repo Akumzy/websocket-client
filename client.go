@@ -12,13 +12,14 @@ import (
 )
 
 type Client struct {
-	eventsLock sync.RWMutex
-	sendLock   sync.Mutex
-	events     map[string]*caller
-	ws         *websocket.Conn
-	Ready      bool
-	options    Options
-	uri        string
+	eventsLock        sync.RWMutex
+	sendLock          sync.Mutex
+	events            map[string]*caller
+	ws                *websocket.Conn
+	Ready             bool
+	options           Options
+	uri               string
+	disconnectHandler func(err error)
 }
 type Options struct {
 	Headers        http.Header
@@ -64,6 +65,9 @@ func (client *Client) On(message string, f interface{}) (err error) {
 	client.eventsLock.Unlock()
 	return
 }
+func (c *Client) OnDisconnect(handler func(err error)) {
+	c.disconnectHandler = handler
+}
 
 // RemoveHandler
 func (client *Client) RemoveHandler(message string) {
@@ -75,7 +79,7 @@ func (client *Client) RemoveHandler(message string) {
 var id = &ID{id: 0}
 
 // Send method sends message to your Websocket server
-// It can take only take upto 3 arguments
+// It can take only take up to 3 arguments
 // first being the event-name your server handler will subscribed to (required)
 // second being the message payload of any type (optional)
 // and third is being an indicator (recommended as bool) showing that this message requires
@@ -102,12 +106,19 @@ func (i *ID) new() int {
 	return i.id
 }
 
-func (c *Client) connect() error {
-	ws, _, err := websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
+func (c *Client) connect() (err error) {
+	defer func() {
+		if c.disconnectHandler != nil {
+			c.disconnectHandler(err)
+		}
+	}()
+	var ws *websocket.Conn
+
+	ws, _, err = websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
 	c.ws = ws
 	log.Printf("Connecting to %v", c.uri)
 	if err != nil {
-		return err
+		return
 	}
 	defer func() {
 		c.Ready = false
@@ -115,13 +126,13 @@ func (c *Client) connect() error {
 	}()
 	ws.SetPingHandler(func(appData string) error {
 		c.Ready = true
-		return nil
+		return err
 	})
 	for {
 		var payload Payload
-		err := ws.ReadJSON(&payload)
+		err = ws.ReadJSON(&payload)
 		if err != nil {
-			return err
+			return
 		}
 		err = func() error {
 			c.eventsLock.RLock()
@@ -131,6 +142,7 @@ func (c *Client) connect() error {
 				args := handler.GetArgs()
 				if len(args) > 0 {
 					t := args[0]
+
 					buf, err := json.Marshal(payload.Data)
 					if err != nil {
 						return err
@@ -146,8 +158,9 @@ func (c *Client) connect() error {
 			return nil
 		}()
 		if err != nil {
-			return err
+			return
 		}
 
 	}
+	return
 }
