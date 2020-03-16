@@ -16,7 +16,7 @@ type Client struct {
 	sendLock          sync.Mutex
 	events            map[string]*caller
 	ws                *websocket.Conn
-	Ready             bool
+	Ready             *bool
 	options           Options
 	uri               string
 	disconnectHandler func(err error)
@@ -121,11 +121,11 @@ func (c *Client) connect() (err error) {
 		return
 	}
 	defer func() {
-		c.Ready = false
+		*c.Ready = false
 		ws.Close()
 	}()
 	ws.SetPingHandler(func(appData string) error {
-		c.Ready = true
+		*c.Ready = true
 		return err
 	})
 	for {
