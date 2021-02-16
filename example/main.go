@@ -33,7 +33,7 @@ func main() {
 	log.Println(err)
 }
 func sendMessageWithAcknowledgment() {
-	log.Printf("Is connection ready %t", client.Ready)
+	log.Printf("Is connection ready %b", client.Ready)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	var mode bool

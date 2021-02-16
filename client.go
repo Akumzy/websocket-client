@@ -19,7 +19,7 @@ type Client struct {
 	Ready             *bool
 	options           Options
 	uri               string
-	disconnectHandler func(err error)
+	disconnectHandler func(err error, statusCode int)
 }
 type Options struct {
 	Headers        http.Header
@@ -65,7 +65,7 @@ func (client *Client) On(message string, f interface{}) (err error) {
 	client.eventsLock.Unlock()
 	return
 }
-func (c *Client) OnDisconnect(handler func(err error)) {
+func (c *Client) OnDisconnect(handler func(err error, statusCode int)) {
 	c.disconnectHandler = handler
 }
 
@@ -107,17 +107,22 @@ func (i *ID) new() int {
 }
 
 func (c *Client) connect() (err error) {
+	var statusCode int
 	defer func() {
 		if c.disconnectHandler != nil {
-			c.disconnectHandler(err)
+			c.disconnectHandler(err, statusCode)
 		}
 	}()
-	var ws *websocket.Conn
+	var (
+		ws  *websocket.Conn
+		res *http.Response
+	)
 
-	ws, _, err = websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
+	ws, res, err = websocket.DefaultDialer.Dial(c.uri, c.options.Headers)
 	c.ws = ws
 	log.Printf("Connecting to %v", c.uri)
 	if err != nil {
+		statusCode = res.StatusCode
 		return
 	}
 	defer func() {
@@ -162,5 +167,4 @@ func (c *Client) connect() (err error) {
 		}
 
 	}
-	return
 }
