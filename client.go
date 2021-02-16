@@ -39,7 +39,7 @@ type Payload struct {
 }
 
 func NewClient(uri string, options Options) *Client {
-	return &Client{uri: uri, options: options, events: make(map[string]*caller)}
+	return &Client{uri: uri, options: options, events: make(map[string]*caller), Ready: new(bool)}
 }
 func (c *Client) Connect() error {
 	err := c.connect()
@@ -109,6 +109,7 @@ func (i *ID) new() int {
 func (c *Client) connect() (err error) {
 	var statusCode int
 	defer func() {
+		*c.Ready = false
 		if c.disconnectHandler != nil {
 			c.disconnectHandler(err, statusCode)
 		}
@@ -126,7 +127,6 @@ func (c *Client) connect() (err error) {
 		return
 	}
 	defer func() {
-		*c.Ready = false
 		ws.Close()
 	}()
 	ws.SetPingHandler(func(appData string) error {
