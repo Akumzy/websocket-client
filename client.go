@@ -1,6 +1,8 @@
 package websocket_client
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -92,6 +94,37 @@ func (client *Client) Send(event string, data ...interface{}) (string, error) {
 		return reply, client.ws.WriteJSON(Payload{Event: event, Data: data[0], Ack: reply})
 	}
 	return "", client.ws.WriteJSON(Payload{Event: event, Data: data[0]})
+}
+
+// SendCompressed method sends compressed message to your Websocket server
+func (client *Client) SendCompressed(event string, data ...interface{}) (string, error) {
+	client.sendLock.Lock()
+	defer client.sendLock.Unlock()
+	if len(data) > 1 {
+		reply := fmt.Sprintf("%v__%d", event, id.new())
+		originalData := data[0].([]byte)
+		log.Printf("Original data size: %v", len(originalData))
+		compressedData, err := compressData(data[0].([]byte))
+		log.Printf("Compressed data size: %v", len(compressedData))
+		if err != nil {
+			return "", err
+		}
+		return reply, client.ws.WriteJSON(Payload{Event: event, Data: compressedData, Ack: reply})
+	}
+	return "", client.ws.WriteJSON(Payload{Event: event, Data: data[0]})
+}
+
+func compressData(data []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	_, err := gz.Write(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 type ID struct {
