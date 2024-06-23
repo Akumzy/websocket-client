@@ -108,7 +108,7 @@ func (client *Client) SendCompressed(event string, data ...interface{}) (string,
 			return "", cErr
 		}
 		log.Printf("Original data size: %v", len(originalData))
-		compressedData, err := compressData(data[0].([]byte))
+		compressedData, err := compressData(originalData)
 		log.Printf("Compressed data size: %v", len(compressedData))
 		if err != nil {
 			return "", err
