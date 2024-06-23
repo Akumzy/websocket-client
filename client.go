@@ -102,7 +102,11 @@ func (client *Client) SendCompressed(event string, data ...interface{}) (string,
 	defer client.sendLock.Unlock()
 	if len(data) > 1 {
 		reply := fmt.Sprintf("%v__%d", event, id.new())
-		originalData := data[0].([]byte)
+		// convert data to []byte
+		originalData, cErr := interfaceToBytes(data[0])
+		if cErr != nil {
+			return "", cErr
+		}
 		log.Printf("Original data size: %v", len(originalData))
 		compressedData, err := compressData(data[0].([]byte))
 		log.Printf("Compressed data size: %v", len(compressedData))
@@ -112,6 +116,14 @@ func (client *Client) SendCompressed(event string, data ...interface{}) (string,
 		return reply, client.ws.WriteJSON(Payload{Event: event, Data: compressedData, Ack: reply})
 	}
 	return "", client.ws.WriteJSON(Payload{Event: event, Data: data[0]})
+}
+
+func interfaceToBytes(data interface{}) ([]byte, error) {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
 }
 
 func compressData(data []byte) ([]byte, error) {
